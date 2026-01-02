@@ -19,6 +19,7 @@
     <select id="weatherProvider" name="weatherProvider" class="form-input" onchange="updateTitleOptions(this.value)">
         <option value="OpenMeteo">Open-Meteo</option>
         <option value="OpenWeatherMap">OpenWeatherMap</option>
+        <option value="BomAU">BOM Australia</option>
     </select>
 
     <label for="units" class="form-label">Units:</label>
@@ -111,8 +112,27 @@
         const titleTimeZone = document.getElementById('weatherTimeZone');
         const titleTimeZoneLabel = document.querySelector('label[for="weatherTimeZone"]');
         const apiKeyLabel = document.querySelector('.api-key-label');
+        const unitsInput = document.getElementById('units');
 
-        if (provider === 'OpenMeteo') {
+        if (provider === 'BomAU') {
+          // Show and enable both options
+          titleLocationRadio.style.display = '';
+          titleLocationLabel.style.display = '';
+          titleLocationRadio.disabled = false;
+          titleLocationRadio.checked = true;
+
+          titleCustomRadio.disabled = false;
+          customTitleInput.disabled = false;
+
+          titleTimeZone.style.display = '';
+          titleTimeZoneLabel.style.display = '';
+          titleTimeZone.disabled = false;
+
+          unitsInput.value = "metric";
+
+          // Hide API Key required label for BomAU
+          if (apiKeyLabel) apiKeyLabel.style.display = 'none';
+        } else if (provider === 'OpenMeteo') {
             // Hide or disable "Location" radio option
             titleLocationRadio.style.display = 'none';
             titleLocationLabel.style.display = 'none';
@@ -200,9 +220,9 @@
             document.getElementById('displayGraph').checked = pluginSettings.displayGraph;
             document.getElementById('displayGraph').value = pluginSettings.displayGraph;
 
-			document.getElementById('displayRain').checked = pluginSettings.displayRain;
+            document.getElementById('displayRain').checked = pluginSettings.displayRain;
             document.getElementById('displayRain').value = pluginSettings.displayRain;
-			
+
             document.getElementById('displayForecast').checked = pluginSettings.displayForecast;
             document.getElementById('displayForecast').value = pluginSettings.displayForecast;
 
@@ -212,21 +232,21 @@
             document.getElementById('moonPhase').value = pluginSettings.moonPhase;
 
             document.getElementById('weatherTimeZone').value = pluginSettings.weatherTimeZone;
-            
+
             selectedTitle = pluginSettings.titleSelection || 'location';
             weatherProvider = pluginSettings.weatherProvider || 'OpenMeteo';
 
             document.getElementById('customTitle').value = pluginSettings.customTitle || '';
         } else {
             // set default values
-            document.getElementById('units').value = "imperial";
+            document.getElementById('units').value = "metric";
             document.getElementById('displayRefreshTime').checked = true;
             document.getElementById('displayRefreshTime').value = "true";
             document.getElementById('displayMetrics').checked = true;
             document.getElementById('displayMetrics').value = "true";
             document.getElementById('displayGraph').checked = true;
             document.getElementById('displayGraph').value = "true";
-			document.getElementById('displayRain').checked = false;
+            document.getElementById('displayRain').checked = false;
             document.getElementById('displayRain').value = "false";
             document.getElementById('displayForecast').checked = true;
             document.getElementById('displayForecast').value = "true";

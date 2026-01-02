@@ -1,37 +1,37 @@
 <div class="form-group">
-    <label for="clock-face" class="form-label">Clock Face:</label>
+    <label for="date-time-layout" class="form-label">Date / Time Layout:</label>
 
-    <div id="clock-face-selection" class="image-grid">
-        {% for face in clock_faces %}
+    <div id="date-time-layout-selection" class="image-grid">
+        {% for layout in date_time_layouts %}
         <div
             class="image-option"
-            data-face-name="{{ face.name }}"
-            data-primary-color="{{ face.primary_color }}"
-            data-secondary-color="{{ face.secondary_color }}"
-            onclick="selectClockFace(this)"
+            data-layout-name="{{ layout.name }}"
+            data-primary-color="{{ layout.primary_color }}"
+            data-secondary-color="{{ layout.secondary_color }}"
+            onclick="selectDateTimeLayout(this)"
         >
             <img
-                src="{{ url_for('plugin.image', plugin_id='date_time', filename=face.icon) }}"
-                alt="{{ face.name }}"
+                src="{{ url_for('plugin.image', plugin_id='date_time', filename=layout.icon) }}"
+                alt="{{ layout.name }}"
             />
         </div>
         {% endfor %}
     </div>
-    <input type="hidden" id="selected-clock-face" name="selectedClockFace" value="{{ clock_faces[0].Name }}" />
+    <input type="hidden" id="selected-date-time-layout" name="selectedDateTimeLayout" value="{{ date_time_layouts[0].Name }}" />
 </div>
 <div class="form-group">
     <div class="form-group">
         <label for="primaryColor" class="form-label">Primary Color:</label>
-        <input type="color" name="primaryColor" class="color-picker" value="{{ clock_faces[0].primary_color }}"/>
+        <input type="color" name="primaryColor" class="color-picker" value="{{ date_time_layouts[0].primary_color }}"/>
     </div>
     <div class="form-group">
         <label for="secondaryColor" class="form-label">Secondary Color:</label>
-        <input type="color" name="secondaryColor" class="color-picker" value="{{ clock_faces[0].secondary_color }}"/>
+        <input type="color" name="secondaryColor" class="color-picker" value="{{ date_time_layouts[0].secondary_color }}"/>
     </div>
 </div>
 
 <script>
-    function selectClockFace(element) {
+    function selectDateTimeLayout(element) {
         // Remove the selected class from any previously selected option
         const previousSelection = document.querySelector('.image-option.selected');
         if (previousSelection) {
@@ -41,32 +41,32 @@
         // Add the selected class to the clicked option
         element.classList.add('selected');
 
-        // Update the hidden input with the selected clock face name
-        const selectedFaceName = element.dataset.faceName;
-        document.getElementById('selected-clock-face').value = selectedFaceName;
+        // Update the hidden input with the selected Date / Time Layout name
+        const selectedDateTimeLayout = element.dataset.layoutName;
+        document.getElementById('selected-date-time-layout').value = selectedDateTimeLayout;
         document.querySelector("[name=primaryColor]").value = element.dataset.primaryColor;
         document.querySelector("[name=secondaryColor]").value = element.dataset.secondaryColor;
     }
 
-    // Default selection for the first clock face or based on plugin_settings
+    // Default selection for the first Date / Time Layout or based on plugin_settings
     document.addEventListener('DOMContentLoaded', () => {
-        const clockFaceContainer = document.getElementById('clock-face-selection');
-        const selectedClockFaceInput = document.getElementById('selected-clock-face');
+        const dateTimeLayoutContainer = document.getElementById('date-time-layout-selection');
+        const selectedDateTimeLayoutInput = document.getElementById('selected-date-time-layout');
 
-        // Check if pluginSettings has a selectedClockFace value
-        const selectedClockFaceFromSettings = pluginSettings?.selectedClockFace;
+        // Check if pluginSettings has a selectedDateTimeLayout value
+        const selectedDateTimeLayoutFromSettings = pluginSettings?.selectedDateTimeLayout;
 
-        let selectedOption = clockFaceContainer.querySelector('.image-option');
+        let selectedOption = dateTimeLayoutContainer.querySelector('.image-option');
 
-        if (selectedClockFaceFromSettings) {
-            // Find the clock face with the name from pluginSettings
-            selectedOption = clockFaceContainer.querySelector(`.image-option[data-face-name="${selectedClockFaceFromSettings}"]`);
+        if (selectedDateTimeLayoutFromSettings) {
+            // Find the Date / Time Layout with the name from pluginSettings
+            selectedOption = dateTimeLayoutContainer.querySelector(`.image-option[data-layout-name="${selectedDateTimeLayoutFromSettings}"]`);
         }
 
         // If a valid option is found, select it
         if (selectedOption) {
             selectedOption.classList.add('selected');
-            selectedClockFaceInput.value = selectedOption.getAttribute('data-face-name');
+            selectedDateTimeLayoutInput.value = selectedOption.getAttribute('data-layout-name');
         }
 
         if (pluginSettings.primaryColor) {

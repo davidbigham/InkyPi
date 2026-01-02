@@ -11,30 +11,30 @@ import pytz
 
 logger = logging.getLogger(__name__)
 
-CLOCK_FACES = [
+DATE_TIME_LAYOUTS = [
     {
-        "name": "Digital Clock",
+        "name": "Day / Date / Time",
         "primary_color": "#ffffff",
         "secondary_color": "#000000",
-        "icon": "faces/digital.png"
+        "icon": "layouts/ddt.png"
     }
 ]
 
 DEFAULT_TIMEZONE = "Australia/Adelaide"
-DEFAULT_CLOCK_FACE = "Digital Clock"
+DEFAULT_DATE_TIME_LAYOUT = "Day / Date / Time"
 
 class DateTime(BasePlugin):
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
-        template_params['clock_faces'] = CLOCK_FACES
+        template_params['date_time_layouts'] = DATE_TIME_LAYOUTS
         return template_params
 
     def generate_image(self, settings, device_config):
-        clock_face = settings.get('selectedClockFace')
+        date_time_layout = settings.get('selectDateTimeLayout')
         primary_color = ImageColor.getcolor(settings.get('primaryColor') or (255,255,255), "RGB")
         secondary_color = ImageColor.getcolor(settings.get('secondaryColor') or (0,0,0), "RGB")
-        if not clock_face or clock_face not in [face['name'] for face in CLOCK_FACES]:
-            clock_face = DEFAULT_CLOCK_FACE
+        if not date_time_layout or date_time_layout not in [layout['name'] for layout in DATE_TIME_LAYOUTS]:
+            date_time_layout = DEFAULT_DATE_TIME_LAYOUT
 
         dimensions = device_config.get_resolution()
         if device_config.get_config("orientation") == "vertical":
@@ -46,9 +46,9 @@ class DateTime(BasePlugin):
 
         img = None
         try:
-            if clock_face == "Digital Clock":
+            if date_time_layout == "Day / Date / Time":
                 img = self.draw_digital_clock(dimensions, current_time, primary_color, secondary_color)
-            # elif clock_face == "Divided Clock":
+            # elif date_time_layout == "Divided Clock":
             #     img = self.draw_divided_clock(dimensions, current_time, primary_color, secondary_color)
         except Exception as e:
             logger.error(f"Failed to draw clock image: {str(e)}")
@@ -64,40 +64,49 @@ class DateTime(BasePlugin):
         image = Image.new("RGBA", dimensions, secondary_color+(255,))
         text = Image.new("RGBA", dimensions, (0, 0, 0, 0))
 
-        font_size = h * 0.33
-        fnt = get_font("DS-Digital", font_size)
-        logger.info(f"Initial font_size = {font_size}")
-
-        padding = 6
-        textlength = fnt.getlength(date_str)
-        bb = fnt.getbbox(date_str)
-        logger.info(f"textlength = {textlength}, font_size = {font_size}, bounding box = {bb}, text = {date_str}, screen = {w} x {h}")
-
-        if textlength + (padding * 2) > w:
-            while textlength + (padding * 2) > w:
-                font_size = font_size - 1
-                fnt = get_font("DS-Digital", font_size)
-                textlength = fnt.getlength(date_str)
-
-            logger.info(f"Adjusted font to fit better: font_size = {font_size}")
-
         text_draw = ImageDraw.Draw(text)
 
         # day text
         # anchor horizontal-vertical hv = mm = middle,middle (https://pillow.readthedocs.io/en/stable/handbook/text-anchors.html#text-anchors)
+        fnt = DateTime.font_that_fits("DS-Digital", day_str, w, h/3)
         text_draw.text((w/2, (h/3)*0), day_str, font=fnt, anchor="ma", fill=primary_color +(255,))
 
         # date text
         # anchor horizontal-vertical hv = mm = middle,middle (https://pillow.readthedocs.io/en/stable/handbook/text-anchors.html#text-anchors)
+        fnt = DateTime.font_that_fits("DS-Digital", date_str, w, h/3)
         text_draw.text((w/2, (h/3)*1), date_str, font=fnt, anchor="ma", fill=primary_color +(255,))
 
         # time text
         # anchor horizontal-vertical hv = mm = middle,middle (https://pillow.readthedocs.io/en/stable/handbook/text-anchors.html#text-anchors)
+        fnt = DateTime.font_that_fits("DS-Digital", time_str, w, h/3)
         text_draw.text((w/2, (h/3)*2), time_str, font=fnt, anchor="ma", fill=primary_color +(255,))
 
         combined = Image.alpha_composite(image, text)
 
         return combined
+
+    @staticmethod
+    def font_that_fits(font_name, text, width, height):
+        font_size = height
+        fnt = get_font(font_name, font_size)
+        # logger.info(f"Initial font_size = {font_size}")
+
+        padding = 2
+        text_length = fnt.getlength(text)
+        bb = fnt.getbbox(text)
+        # logger.info(f"textlength = {text_length}, font_name = {font_name}, font_size = {font_size}, bounding box = {bb}, text = {text}, drawing size = {width} x {height}")
+
+        if text_length + (padding * 2) > width:
+            while text_length + (padding * 2) > width:
+                if font_size <= 2:
+                    break
+                font_size = font_size - 1
+                fnt = get_font(font_name, font_size)
+                text_length = fnt.getlength(text)
+
+            # logger.info(f"Adjusted font to fit better: font_size = {font_size}")
+
+        return fnt
 
     @staticmethod
     def format_day(datetime):

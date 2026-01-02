@@ -1,3 +1,5 @@
+from typing import Optional
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image
 import os
@@ -8,9 +10,9 @@ from astral import moon
 import pytz
 from io import BytesIO
 import math
-
+from ..weather_au.weather_bom_au_api import Location
 logger = logging.getLogger(__name__)
-        
+
 def get_moon_phase_name(phase_age: float) -> str:
     """Determines the name of the lunar phase based on the age of the moon."""
     PHASES_THRESHOLDS = [
@@ -26,7 +28,7 @@ def get_moon_phase_name(phase_age: float) -> str:
 
     for threshold, phase_name in PHASES_THRESHOLDS:
         if phase_age <= threshold:
-            return phase_name  
+            return phase_name
     return "newmoon"
 
 UNITS = {
@@ -106,6 +108,19 @@ class Weather(BasePlugin):
                 weather_data = self.get_open_meteo_data(lat, long, units, forecast_days + 1)
                 aqi_data = self.get_open_meteo_air_quality(lat, long)
                 template_params = self.parse_open_meteo_data(weather_data, aqi_data, tz, units, time_format, lat)
+            elif weather_provider == "BomAU":
+                locations = Location.search(lat, long)
+                if len(locations) <= 0:
+                    raise RuntimeError(f"BOM AU Location not found for {lat:.4f}, {long:.4f}")
+                location = locations[0]
+                units = 'metric'
+                if settings.get('titleSelection', 'location') == 'location':
+                    title = location.name
+                template_params = self.get_bom_au_template_params(location, units, time_format, lat, long)
+                # bomTz = weather_data["details"].timezone
+                # tz = pytz.timezone(bomTz)
+                # aqi_data = None # or use OpenMeteo? self.get_open_meteo_air_quality(lat, long)
+                # template_params = self.parse_bom_au_data(weather_data, aqi_data, tz, units, time_format, lat)
             else:
                 raise RuntimeError(f"Unknown weather provider: {weather_provider}")
 
@@ -113,7 +128,7 @@ class Weather(BasePlugin):
         except Exception as e:
             logger.error(f"{weather_provider} request failed: {str(e)}")
             raise RuntimeError(f"{weather_provider} request failure, please check logs.")
-       
+
         dimensions = device_config.get_resolution()
         if device_config.get_config("orientation") == "vertical":
             dimensions = dimensions[::-1]
@@ -179,14 +194,14 @@ class Weather(BasePlugin):
 
         data['forecast'] = self.parse_open_meteo_forecast(weather_data.get('daily', {}), tz, is_day, lat)
         data['data_points'] = self.parse_open_meteo_data_points(weather_data, aqi_data, tz, units, time_format)
-        
+
         data['hourly_forecast'] = self.parse_open_meteo_hourly(weather_data.get('hourly', {}), tz, time_format)
         return data
 
     def map_weather_code_to_icon(self, weather_code, is_day):
 
         icon = "01d" # Default to clear day icon
-        
+
         if weather_code in [0]:   # Clear sky
             icon = "01d"
         elif weather_code in [1]: # Mainly clear
@@ -196,19 +211,19 @@ class Weather(BasePlugin):
         elif weather_code in [3]: # Overcast
             icon = "04d"
         elif weather_code in [51, 61, 80]: # Drizzle, showers, rain: Light
-            icon = "51d"          
+            icon = "51d"
         elif weather_code in [53, 63, 81]: # Drizzle, showers, rain: Moderatr
             icon = "53d"
         elif weather_code in [55, 65, 82]: # Drizzle, showers, rain: Heavy
             icon = "09d"
         elif weather_code in [45]: # Fog
-            icon = "50d"                       
+            icon = "50d"
         elif weather_code in [48]: # Icy fog
             icon = "48d"
         elif weather_code in [56, 66]: # Light freezing Drizzle
-            icon = "56d"            
+            icon = "56d"
         elif weather_code in [57, 67]: # Freezing Drizzle
-            icon = "57d"            
+            icon = "57d"
         elif weather_code in [71, 85]: # Snow fall: Slight
             icon = "71d"
         elif weather_code in [73]:     # Snow fall: Moderate
@@ -228,7 +243,7 @@ class Weather(BasePlugin):
             elif icon == "022d":
                 icon = "022n"     # Mainly clear night
             elif icon == "02d":
-                icon = "02n"      # Partly cloudy night                
+                icon = "02n"      # Partly cloudy night
             elif icon == "10d":
                 icon = "10n"      # Rain night
 
@@ -250,7 +265,7 @@ class Weather(BasePlugin):
                 phase_name = "lastquarter"
             elif phase_name == "lastquarter":
                 phase_name = "firstquarter"
-        
+
         return self.get_plugin_dir(f"icons/{phase_name}.png")
 
     def parse_forecast(self, daily_forecast, tz, current_suffix, lat):
@@ -317,7 +332,7 @@ class Weather(BasePlugin):
             )
 
         return forecast
-        
+
     def parse_open_meteo_forecast(self, daily_data, tz, is_day, lat):
         """
         Parse the daily forecast from Open-Meteo API and calculate moon phase and illumination using the local 'astral' library.
@@ -329,7 +344,7 @@ class Weather(BasePlugin):
 
         forecast = []
 
-        for i in range(0, len(times)): 
+        for i in range(0, len(times)):
             dt = datetime.fromisoformat(times[i]).replace(tzinfo=timezone.utc).astimezone(tz)
             day_label = dt.strftime("%a")
 
@@ -339,7 +354,7 @@ class Weather(BasePlugin):
 
             timestamp = int(dt.replace(hour=12, minute=0, second=0).timestamp())
             target_date: date = dt.date() + timedelta(days=1)
-           
+
             try:
                 phase_age = moon.phase(target_date)
                 phase_name_north_hemi = get_moon_phase_name(phase_age)
@@ -371,7 +386,7 @@ class Weather(BasePlugin):
             if units == "imperial":
                 rain = rain_mm / 25.4
             else:
-                rain = rain_mm 
+                rain = rain_mm
             hour_forecast = {
                 "time": self.format_time(dt, time_format, hour_only=True),
                 "temperature": int(hour.get("temp")),
@@ -610,7 +625,7 @@ class Weather(BasePlugin):
                 continue
 
         visibility_str = f">{current_visibility}" if isinstance(current_visibility, (int, float)) and (
-            (units == "imperial" and current_visibility >= 32808) or 
+            (units == "imperial" and current_visibility >= 32808) or
             (units != "imperial" and current_visibility >= 10)
         ) else current_visibility
 
@@ -657,7 +672,7 @@ class Weather(BasePlugin):
         for arrow, upper_bound in DIRECTIONS:
             if wind_deg < upper_bound:
                 return arrow
-        
+
         return "↑"
 
     def get_weather_data(self, api_key, units, lat, long):
@@ -696,11 +711,11 @@ class Weather(BasePlugin):
         unit_params = OPEN_METEO_UNIT_PARAMS[units]
         url = OPEN_METEO_FORECAST_URL.format(lat=lat, long=long, forecast_days=forecast_days) + f"&{unit_params}"
         response = requests.get(url)
-        
+
         if not 200 <= response.status_code < 300:
             logging.error(f"Failed to retrieve Open-Meteo weather data: {response.content}")
             raise RuntimeError("Failed to retrieve Open-Meteo weather data.")
-        
+
         return response.json()
 
     def get_open_meteo_air_quality(self, lat, long):
@@ -709,21 +724,21 @@ class Weather(BasePlugin):
         if not 200 <= response.status_code < 300:
             logging.error(f"Failed to retrieve Open-Meteo air quality data: {response.content}")
             raise RuntimeError("Failed to retrieve Open-Meteo air quality data.")
-        
+
         return response.json()
-    
+
     def format_time(self, dt, time_format, hour_only=False, include_am_pm=True):
         """Format datetime based on 12h or 24h preference"""
         if time_format == "24h":
             return dt.strftime("%H:00" if hour_only else "%H:%M")
-        
+
         if include_am_pm:
             fmt = "%I %p" if hour_only else "%I:%M %p"
         else:
             fmt = "%I" if hour_only else "%I:%M"
 
         return dt.strftime(fmt).lstrip("0")
-    
+
     def parse_timezone(self, weatherdata):
         """Parse timezone from weather data"""
         if 'timezone' in weatherdata:
@@ -732,3 +747,335 @@ class Weather(BasePlugin):
         else:
             logger.error("Failed to retrieve Timezone from weather data")
             raise RuntimeError("Timezone not found in weather data.")
+
+    def get_bom_au_template_params(self, location, units, time_format, lat, long):
+        location_details = location.details()
+        observations = location.observations()
+        warnings = location.warnings()
+        forcast_daily = location.forcast_daily()
+        forcast_hourly = location.forcast_hourly()
+
+        bomTz = location_details.timezone
+        tz = pytz.timezone(bomTz)
+
+        now_forcast_day = forcast_daily[0]
+        for forcast_day in forcast_daily:
+            if forcast_day.now is not None:
+                now_forcast_day = forcast_day
+                break
+
+        now_dt = now_forcast_day.date.astimezone(tz) if now_forcast_day.date is not None else datetime.now(tz)
+        icon_descriptor = now_forcast_day.icon_descriptor
+        is_day = not now_forcast_day.now.is_night
+
+        aqi_data = None # or use OpenMeteo? self.get_open_meteo_air_quality(lat, long)
+
+        temp = observations.temp if observations.temp is not None else 0
+        temp_feels_like = observations.temp_feels_like if observations.temp_feels_like is not None else temp
+
+        current_icon = self.map_bom_au_icon_descriptor_to_icon(icon_descriptor, is_day)
+
+        data = {
+            "current_date": now_dt.strftime("%A, %B %d"),
+            "current_day_icon": self.get_plugin_dir(f'icons/{current_icon}.png'),
+            "current_temperature": str(round(temp)),
+            "feels_like": str(round(temp_feels_like)),
+            "temperature_unit": UNITS[units]["temperature"],
+            "units": units,
+            "time_format": time_format
+        }
+
+        data['forecast'] = self.parse_bom_au_daily_forecast(forcast_daily, tz, is_day, lat)
+        data['data_points'] = self.parse_bom_au_data_points(observations, forcast_daily, forcast_hourly, aqi_data, tz, units, time_format)
+
+        data['hourly_forecast'] = self.parse_bom_au_hourly(forcast_hourly, tz, time_format)
+
+        logger.info(f"BOMAu template data: {data}")
+        return data
+
+    def parse_bom_au_daily_forecast(self, forcast_daily, tz, is_day, lat):
+        """
+        Parse the daily forecast from BOM AU API and calculate moon phase and illumination using the local 'astral' library.
+        """
+        forecast = []
+
+        for forcast_day in forcast_daily:
+            dt = forcast_day.date.astimezone(tz)
+            day_label = dt.strftime("%a")
+            is_day = not forcast_day.now.is_night if forcast_day.now is not None else True
+
+            icon_descriptor = forcast_day.icon_descriptor
+            weather_icon = self.map_bom_au_icon_descriptor_to_icon(icon_descriptor, is_day)
+            weather_icon_path = self.get_plugin_dir(f"icons/{weather_icon}.png")
+
+            target_date: date = dt.date() + timedelta(days=1)
+            try:
+                phase_age = moon.phase(target_date)
+                phase_name_north_hemi = get_moon_phase_name(phase_age)
+                LUNAR_CYCLE_DAYS = 29.530588853
+                phase_fraction = phase_age / LUNAR_CYCLE_DAYS
+                illum_pct = (1 - math.cos(2 * math.pi * phase_fraction)) / 2 * 100
+            except Exception as e:
+                logger.error(f"Error calculating moon phase for {target_date}: {e}")
+                illum_pct = 0
+                phase_name_north_hemi = "newmoon"
+            moon_icon_path = self.get_moon_phase_icon_path(phase_name_north_hemi, lat)
+
+            now = forcast_day.now
+            now_min = Optional[float]
+            now_max = Optional[float]
+            if now is not None:
+                temp_now = now.temp_now
+                temp_later = now.temp_later
+                now_min = min([temp_now, temp_later])
+                now_max = max([temp_now, temp_later])
+
+            temp_max = forcast_day.temp_max if forcast_day.temp_max is not None else now_max
+            temp_min = forcast_day.temp_min if forcast_day.temp_min is not None else now_min
+
+            forecast.append({
+                "day": day_label,
+                "high": int(temp_max),
+                "low": int(temp_min),
+                "icon": weather_icon_path,
+                "moon_phase_pct": f"{illum_pct:.0f}",
+                "moon_phase_icon": moon_icon_path
+            })
+
+        logger.info(f"BOMAu daily forecast: {forecast}")
+        return forecast
+
+    def parse_bom_au_hourly(self, forcast_hourly, tz, time_format):
+        """
+        Parse the hourly forecast from BOM AU API
+        """
+        hourly = []
+
+        current_time_in_tz = datetime.now(tz)
+
+        for forcast_hour in forcast_hourly:
+            forecast_time_in_tz = forcast_hour.time.astimezone(tz)
+            if forecast_time_in_tz.date() < current_time_in_tz.date():
+                continue
+            if forecast_time_in_tz.date() == current_time_in_tz.date() and forecast_time_in_tz.hour < current_time_in_tz.hour:
+                continue
+
+            hour_forecast = {
+                "time": self.format_time(forecast_time_in_tz, time_format, True),
+                "temperature": int(forcast_hour.temp) if forcast_hour.temp else 0,
+                "precipitation": (forcast_hour.rain.chance / 100) if forcast_hour.rain.chance else 0,
+                "rain": (forcast_hour.rain.amount.max) if forcast_hour.rain.amount.max is not None else 0
+            }
+            hourly.append(hour_forecast)
+
+        logger.info(f"BOMAu hourly forecast: {hourly}")
+        return hourly
+
+    def parse_bom_au_data_points(self, observations, forcast_daily, forcast_hourly, aqi_data, tz, units, time_format):
+        """Parses current data points from BOM AU API """
+        data_points = []
+
+        current_time_in_tz = datetime.now(tz)
+
+        now_forcast_day = forcast_daily[0]
+        for forcast_day in forcast_daily:
+            if forcast_day.now is not None:
+                now_forcast_day = forcast_day
+                break
+
+        # Sunrise
+        sunrise_time = now_forcast_day.astronomical.sunrise_time if now_forcast_day.astronomical is not None else None
+        if sunrise_time:
+            sunrise_dt = sunrise_time.astimezone(tz)
+            data_points.append({
+                "label": "Sunrise",
+                "measurement": self.format_time(sunrise_dt, time_format, include_am_pm=False),
+                "unit": "" if time_format == "24h" else sunrise_dt.strftime('%p'),
+                "icon": self.get_plugin_dir('icons/sunrise.png')
+            })
+        else:
+            logging.error(f"Sunrise not found in BOM AU response, this is expected for polar areas in midnight sun and polar night periods.")
+
+        # Sunset
+        sunset_time = now_forcast_day.astronomical.sunset_time if now_forcast_day.astronomical is not None else None
+        if sunset_time:
+            sunset_dt = sunset_time.astimezone(tz)
+            data_points.append({
+                "label": "Sunset",
+                "measurement": self.format_time(sunset_dt, time_format, include_am_pm=False),
+                "unit": "" if time_format == "24h" else sunset_dt.strftime('%p'),
+                "icon": self.get_plugin_dir('icons/sunset.png')
+            })
+        else:
+            logging.error(f"Sunset not found in Open-Meteo response, this is expected for polar areas in midnight sun and polar night periods.")
+
+        # Wind
+        wind_speed = observations.wind.speed_knot if observations.wind is not None else 0
+        wind_direction = observations.wind.direction
+        wind_arrow = self.get_bom_au_wind_arrow(wind_direction)
+        wind_unit = "knots"
+        data_points.append({
+            "label": "Wind",
+            "measurement": wind_speed,
+            "unit": wind_unit,
+            "icon": self.get_plugin_dir('icons/wind.png'),
+            "arrow": wind_arrow
+        })
+
+        # Humidity
+        current_humidity = observations.humidity if observations.humidity is not None else "N/A"
+        data_points.append({
+            "label": "Humidity",
+            "measurement": current_humidity,
+            "unit": '%',
+            "icon": self.get_plugin_dir('icons/humidity.png')
+        })
+
+
+        # Rain since 9am
+        current_rainfall = observations.rain_since_9am if observations.rain_since_9am is not None else "N/A"
+        data_points.append({
+            "label": "Rain",
+            "measurement": current_rainfall,
+            "unit": 'mm',
+            "icon": self.get_plugin_dir('icons/09d.png')
+        })
+
+        # # Pressure - unavailable on BOM API
+        # current_pressure = "N/A"
+        # data_points.append({
+        #     "label": "Pressure",
+        #     "measurement": current_pressure,
+        #     "unit": 'hPa',
+        #     "icon": self.get_plugin_dir('icons/pressure.png')
+        # })
+
+        # UV Index
+        current_uv_index = now_forcast_day.uv.max_index if now_forcast_day.uv.max_index is not None else "N/A"
+        data_points.append({
+            "label": "UV Index",
+            "measurement": current_uv_index,
+            "unit": '',
+            "icon": self.get_plugin_dir('icons/uvi.png')
+        })
+
+        # # Visibility - unavailable in BOM API
+        # visibility_str = "N/A"
+        # data_points.append({
+        #     "label": "Visibility",
+        #     "measurement": visibility_str,
+        #     "unit": '',
+        #     "icon": self.get_plugin_dir('icons/visibility.png')
+        # })
+
+        # Air Quality
+        current_aqi = "N/A"
+        scale = ""
+        if aqi_data:
+            aqi_hourly_times = aqi_data.get('hourly', {}).get('time', [])
+            aqi_values = aqi_data.get('hourly', {}).get('european_aqi', [])
+            for i, time_str in enumerate(aqi_hourly_times):
+                try:
+                    if datetime.fromisoformat(time_str).astimezone(tz).hour == current_time_in_tz.hour:
+                        current_aqi = round(aqi_values[i], 1)
+                        break
+                except ValueError:
+                    logger.warning(f"Could not parse time string {time_str} for AQI.")
+                    continue
+            if current_aqi != "N/A":
+                scale = ["Good","Fair","Moderate","Poor","Very Poor","Ext Poor"][min(current_aqi//20,5)]
+        data_points.append({
+            "label": "Air Quality",
+            "measurement": current_aqi,
+            "unit": scale,
+            "icon": self.get_plugin_dir('icons/aqi.png')
+        })
+
+        return data_points
+
+    def map_bom_au_icon_descriptor_to_icon(self, icon_descriptor, is_day):
+
+        icon = "01d" # Default to clear day icon
+
+        if icon_descriptor in ["sunny", "clear"]:   # Clear sky
+            icon = "01d"
+        elif icon_descriptor in ["mostly_sunny"]: # Mainly clear
+            icon = "022d"
+        elif icon_descriptor in ["partly_cloudy"]: # Partly cloudy
+            icon = "02d"
+        elif icon_descriptor in ["cloudy"]: # Overcast
+            icon = "04d"
+        elif icon_descriptor in ["light_shower"]: # Drizzle, showers, rain: Light
+            icon = "51d"
+        elif icon_descriptor in ["shower"]: # Drizzle, showers, rain: Moderatr
+            icon = "53d"
+        elif icon_descriptor in ["heavy_shower", "light_rain", "rain"]: # Drizzle, showers, rain: Heavy
+            icon = "09d"
+        elif icon_descriptor in ["fog"]: # Fog
+            icon = "50d"
+        elif icon_descriptor in ["snow", "frost"]:     # Snow grain
+            icon = "77d"
+        elif icon_descriptor in ["storm", "cyclone"]: # Thunderstorm
+            icon = "11d"
+        elif icon_descriptor in ["windy", "dusty"]: #
+            icon = "wind"
+        elif icon_descriptor in ["hazy"]: #
+            icon = "visibility"
+
+        if is_day == 0:
+            if icon == "01d":
+                icon = "01n"      # Clear sky night
+            elif icon == "022d":
+                icon = "022n"     # Mainly clear night
+            elif icon == "02d":
+                icon = "02n"      # Partly cloudy night
+            elif icon == "10d":
+                icon = "10n"      # Rain night
+
+        return icon
+
+    def get_bom_au_wind_arrow(self, direction: str) -> str:
+        DIRECTIONS_MAP = {
+            "N": "↓",
+            "NNE": "↙",
+            "NE": "↙",
+            "ENE": "←",
+            "E": "←",
+            "ESE": "←",
+            "SE": "↖",
+            "SSE": "↖",
+            "S": "↑",
+            "SSW": "↗",
+            "SW": "↗",
+            "WSW": "→",
+            "W": "→",
+            "WNW": "↘",
+            "NW": "↘",
+            "NNW": "↘"
+        }
+        if DIRECTIONS_MAP[direction] is not None:
+            return DIRECTIONS_MAP[direction]
+
+        return "↑"
+
+def calculate_relative_humidity(T_air_c, Td_c):
+    """
+    Calculates relative humidity (%) from air temperature and dew point temperature (°C).
+    Uses the Magnus formula approximation.
+    """
+    # Calculate saturation vapor pressure at dew point (actual vapor pressure)
+    e_s_td = 6.112 * math.exp((17.67 * Td_c) / (Td_c + 243.5))
+
+    # Calculate saturation vapor pressure at air temperature
+    e_s_t_air = 6.112 * math.exp((17.67 * T_air_c) / (T_air_c + 243.5))
+
+    # Calculate relative humidity as a percentage
+    rh = (e_s_td / e_s_t_air) * 100
+
+    # Ensure RH is within a valid range
+    if rh > 100:
+        rh = 100.0
+    elif rh < 0:
+        rh = 0.0
+
+    return round(rh, 2)
