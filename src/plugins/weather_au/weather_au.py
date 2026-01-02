@@ -1,3 +1,5 @@
+from typing import Optional
+
 from utils.app_utils import resolve_path, get_font
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageColor, ImageDraw, ImageFont
@@ -78,18 +80,40 @@ class WeatherAU(BasePlugin):
 
         # img = None
         try:
-            img = self.draw_weather(observations, dimensions, primary_color, secondary_color) # , primary_color, secondary_color
+            img = self.draw_weather(location, dimensions, primary_color, secondary_color) # , primary_color, secondary_color
         except Exception as e:
             logger.error(f"Failed to draw clock image: {str(e)}")
             raise RuntimeError("Failed to display clock.")
         return img
 
-    def draw_weather(self, observations, dimensions, primary_color=(255,255,255), secondary_color=(0,0,0)) -> Image:
+    def draw_weather(self, location, dimensions, primary_color=(255,255,255), secondary_color=(0,0,0)) -> Image:
         w,h = dimensions
 
+        observations = location.observations()
+        forcast_daily = location.forcast_daily()
+
+        now_forcast_day = forcast_daily[0]
+        for forcast_day in forcast_daily:
+            if forcast_day.now is not None:
+                now_forcast_day = forcast_day
+                break
+
+        now = now_forcast_day.now
+        now_min = Optional[float]
+        now_max = Optional[float]
+        if now is not None:
+            temp_now = now.temp_now
+            temp_later = now.temp_later
+            now_min = min([temp_now, temp_later])
+            now_max = max([temp_now, temp_later])
+
+        temp_max = now_forcast_day.temp_max if now_forcast_day.temp_max is not None else now_max
+        temp_min = now_forcast_day.temp_min if now_forcast_day.temp_min is not None else now_min
+
+
         temp_str = f"NOW: {observations.temp} C"
-        max_min_str = f"MAX: {observations.max_temp.value} C, MIN: {observations.min_temp.value} C"
-        wind_rain_str = f"WIND: {observations.wind.speed_knot} KN / RAIN: {observations.rain_since_9am} mm"
+        max_min_str = f"{temp_max} C / {temp_min} C" #f"{observations.max_temp.value} C / {observations.min_temp.value} C"
+        wind_rain_str = f"{observations.wind.speed_knot} KN  {observations.rain_since_9am} mm"
         # max_leng_text = max([temp_str, max_min_str, wind_rain_str])
         # logger.info(f"max_leng_text = {max_leng_text}")
 
