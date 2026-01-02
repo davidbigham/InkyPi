@@ -1,3 +1,4 @@
+from __future__ import annotations
 from http import HTTPStatus
 import json
 import urllib.request

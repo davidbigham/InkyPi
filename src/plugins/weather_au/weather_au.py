@@ -5,14 +5,7 @@ import logging
 import pytz
 
 from datetime import datetime
-from .weather_bom_au_api import (
-    Location,
-    LocationDetails,
-    LocationForecastDaily,
-    LocationForecastHourly,
-    LocationWarning,
-    LocationObservation
-)
+from .weather_bom_au_api import Location
 
 logger = logging.getLogger(__name__)
 
